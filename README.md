@@ -23,11 +23,11 @@ La escena es interactiva y permite alternar los distintos modos mediante control
 La cámara utiliza un sistema lookAt con movimiento simple, permitiendo orbitar alrededor de la escena para observar los efectos desde diferentes puntos de vista.
 
 # Controles por teclado/UI para alternar:
-1 = Gouraud 
-2 = Phong por fragmento
-3 = Blinn-Phong 
-4 = Spotlight ON/OFF 
-5 = Fog ON/OFF 
-6 = Toon ON/OFF 
-P = proyección Perspectiva/Ortográfica 
-Cámara con lookAt + movimiento simple (orbitar o WASD).
+1 = Gouraud // 
+2 = Phong por fragmento //
+3 = Blinn-Phong //
+4 = Spotlight ON/OFF // 
+5 = Fog ON/OFF //
+6 = Toon ON/OFF //
+P = proyección Perspectiva/Ortográfica //
+Cámara con lookAt + movimiento simple (orbitar o WASD). //
