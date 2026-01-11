@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Proyecto Final - Iluminación y Atmósfera</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: #eee;
+            font-family: system-ui, Arial, sans-serif;
+        }
+
+        #wrap {
+            display: flex;
+            gap: 16px;
+            padding: 16px;
+        }
+
+        canvas {
+            border: 1px solid #444;
+            background: #000;
+        }
+
+        #panel {
+            max-width: 420px;
+            line-height: 1.4;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .hint {
+            color: #bbb;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="wrap">
+        <div>
+            <canvas id="glcanvas" width="700" height="700"></canvas>
+            <div id="hud" class="mono hint"></div>
+        </div>
+
+        <div id="panel">
+            <h2>Iluminación avanzada + atmósfera</h2>
+            <p>
+                Mini diorama 3D para comparar Gouraud, Phong, Blinn-Phong, spotlight,
+                niebla y Toon shader en tiempo real.
+            </p>
+
+            <h3>Controles</h3>
+            <ul class="mono">
+                <li>1 → Gouraud</li>
+                <li>2 → Phong</li>
+                <li>3 → Blinn-Phong</li>
+                <li>4 → Spotlight ON / OFF</li>
+                <li>5 → Fog ON / OFF</li>
+                <li>6 → Toon ON / OFF</li>
+                <li>P → Perspectiva / Ortográfica</li>
+                <li>Ratón → Orbitar cámara</li>
+                <li>Rueda → Zoom</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- ===== SHADERS ===== -->
+    <!-- Gouraud -->
+    <script id="vs_gouraud" type="x-shader/x-vertex">
+        attribute vec3 aPos;
+        attribute vec3 aNor;
+
+        uniform mat4 uModel, uView, uProj;
+        uniform mat3 uNormalMat;
+
+        uniform vec3 uLightPos, uLa, uLd, uLs;
+        uniform vec3 uKa, uKd, uKs;
+        uniform float uAlpha;
+
+        uniform bool uUseSpot;
+        uniform vec3 uSpotDir;
+        uniform float uCutoffDeg, uSpotExp;
+        uniform float uKc, uKl, uKq;
+
+        varying vec3 vColor;
+
+        void main(){
+          vec4 ecPos4 = uView * uModel * vec4(aPos,1.0);
+          vec3 ecPos = ecPos4.xyz;
+
+          vec3 N = normalize(uNormalMat * aNor);
+          vec3 S = normalize(uLightPos - ecPos);
+          vec3 V = normalize(-ecPos);
+          vec3 R = reflect(-S, N);
+
+          float spot = 1.0;
+          if(uUseSpot){
+            float cosA = dot(-S, normalize(uSpotDir));
+            float cutoff = cos(radians(uCutoffDeg));
+            spot = (cosA > cutoff) ? pow(cosA, uSpotExp) : 0.0;
+          }
+
+          float d = length(uLightPos - ecPos);
+          float att = 1.0 / (uKc + uKl*d + uKq*d*d);
+
+          vec3 ambient = uKa * uLa;
+          float NdotL = max(dot(N,S),0.0);
+          vec3 diffuse = NdotL * uKd * uLd;
+
+          float spec = 0.0;
+          if(NdotL>0.0)
+            spec = pow(max(dot(R,V),0.0), uAlpha);
+
+          vec3 specular = spec * uKs * uLs;
+
+          vColor = ambient + (diffuse + specular) * spot * att;
+          gl_Position = uProj * ecPos4;
+        }
+    </script>
+
+    <script id="fs_gouraud" type="x-shader/x-fragment">
+        precision mediump float;
+        varying vec3 vColor;
+        void main(){
+          gl_FragColor = vec4(vColor,1.0);
+        }
+    </script>
+
+    <!-- Phong / Blinn / Toon + Fog -->
+    <script id="vs_lit" type="x-shader/x-vertex">
+        attribute vec3 aPos;
+        attribute vec3 aNor;
+
+        uniform mat4 uModel, uView, uProj;
+        uniform mat3 uNormalMat;
+
+        varying vec3 vPosEC;
+        varying vec3 vNorEC;
+
+        void main(){
+          vec4 ecPos4 = uView * uModel * vec4(aPos,1.0);
+          vPosEC = ecPos4.xyz;
+          vNorEC = normalize(uNormalMat * aNor);
+          gl_Position = uProj * ecPos4;
+        }
+    </script>
+
+    <script id="fs_lit" type="x-shader/x-fragment">
+        precision mediump float;
+
+        varying vec3 vPosEC;
+        varying vec3 vNorEC;
+
+        uniform int uSpecModel;
+        uniform vec3 uLightPos, uLa, uLd, uLs;
+        uniform vec3 uKa, uKd, uKs;
+        uniform float uAlpha;
+
+        uniform bool uUseSpot, uUseToon, uUseFog;
+        uniform vec3 uSpotDir, uFogColor;
+        uniform float uCutoffDeg, uSpotExp;
+        uniform float uKc, uKl, uKq;
+        uniform float uFogStart, uFogEnd;
+
+        void main(){
+          vec3 N = normalize(vNorEC);
+          vec3 S = normalize(uLightPos - vPosEC);
+          vec3 V = normalize(-vPosEC);
+
+          float spot = 1.0;
+          if(uUseSpot){
+            float cosA = dot(-S, normalize(uSpotDir));
+            float cutoff = cos(radians(uCutoffDeg));
+            spot = (cosA > cutoff) ? pow(cosA, uSpotExp) : 0.0;
+          }
+
+          float d = length(uLightPos - vPosEC);
+          float att = 1.0 / (uKc + uKl*d + uKq*d*d);
+
+          vec3 ambient = uKa * uLa;
+          float NdotL = max(dot(N,S),0.0);
+
+          vec3 diffuse = uKd * uLd * NdotL;
+
+          float spec = 0.0;
+          if(NdotL > 0.0){
+            if(uSpecModel==0){
+              vec3 R = reflect(-S,N);
+              spec = pow(max(dot(R,V),0.0), uAlpha);
+            }else{
+              vec3 H = normalize(S+V);
+              spec = pow(max(dot(N,H),0.0), uAlpha);
+            }
+          }
+
+          vec3 color = ambient + (diffuse + spec*uKs*uLs) * spot * att;
+
+          if(uUseToon){
+            float levels = 4.0;
+            float q = floor(NdotL * levels) / (levels - 1.0);
+            color = ambient + q * uKd * uLd * spot * att;
+          }
+
+          if(uUseFog){
+            float f = clamp((uFogEnd - d) / (uFogEnd - uFogStart), 0.0, 1.0);
+            color = mix(uFogColor, color, f);
+          }
+
+          gl_FragColor = vec4(color,1.0);
+        }
+    </script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.4.0/gl-matrix.js"></script>
+    <script src="ProyectFinalSantiagoCardozo.js"></script>
+</body>
+</html>
